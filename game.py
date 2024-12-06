@@ -29,14 +29,14 @@ class SnakeGameAI:
     def __init__(self, w=640, h=480):
         self.w = w
         self.h = h
-        # init display
         self.display = pygame.display.set_mode((self.w, self.h))
         pygame.display.set_caption('Snake AI')
         self.clock = pygame.time.Clock()
+        self.obstacles = []
+        self.level = 1
         self.reset()
 
     def reset(self):
-        # init game state
         self.direction = Direction.RIGHT
         self.head = Point(self.w/2, self.h/2)
         self.snake = [self.head,
@@ -44,72 +44,114 @@ class SnakeGameAI:
                      Point(self.head.x-(2*BLOCK_SIZE), self.head.y)]
         self.score = 0
         self.food = None
-        self._place_food()
         self.frame_iteration = 0
+        self.obstacles = []
+        self.level = 1
+        self._generate_obstacles()
+        self._place_food()
+
+    def _generate_obstacles(self):
+        self.obstacles = []
+        num_obstacles = random.randint(3, 5 + self.level)  # More obstacles as level increases
+        
+        # Generate random obstacles
+        for _ in range(num_obstacles):
+            size = random.randint(2, 4)  # Random size of obstacle cluster
+            start_x = random.randint(1, (self.w//BLOCK_SIZE)-size-1) * BLOCK_SIZE
+            start_y = random.randint(1, (self.h//BLOCK_SIZE)-size-1) * BLOCK_SIZE
+            
+            # Create cluster of obstacles
+            for dx in range(size):
+                for dy in range(size):
+                    if random.random() < 0.7:  # 70% chance to place obstacle in cluster
+                        obstacle = Point(start_x + dx*BLOCK_SIZE, start_y + dy*BLOCK_SIZE)
+                        if obstacle not in self.snake and \
+                           obstacle != self.food and \
+                           not any(abs(obstacle.x - s.x) < 3*BLOCK_SIZE and 
+                                 abs(obstacle.y - s.y) < 3*BLOCK_SIZE for s in self.snake):
+                            self.obstacles.append(obstacle)
 
     def _place_food(self):
-        x = random.randint(0, (self.w-BLOCK_SIZE)//BLOCK_SIZE)*BLOCK_SIZE
-        y = random.randint(0, (self.h-BLOCK_SIZE)//BLOCK_SIZE)*BLOCK_SIZE
-        self.food = Point(x, y)
-        if self.food in self.snake:
-            self._place_food()
+        while True:
+            x = random.randint(0, (self.w-BLOCK_SIZE)//BLOCK_SIZE)*BLOCK_SIZE
+            y = random.randint(0, (self.h-BLOCK_SIZE)//BLOCK_SIZE)*BLOCK_SIZE
+            self.food = Point(x, y)
+            if self.food not in self.snake and self.food not in self.obstacles:
+                # 10% chance to place a special food that increases level
+                if random.random() < 0.1:
+                    self.special_food = True
+                else:
+                    self.special_food = False
+                break
 
     def play_step(self, action):
         self.frame_iteration += 1
-        # 1. collect user input
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 quit()
 
-        # 2. move
         self._move(action)
         self.snake.insert(0, self.head)
 
-        # 3. check if game over
         reward = 0
         game_over = False
+        
+        # Check collision with obstacles
+        if self.head in self.obstacles:
+            game_over = True
+            reward = -15
+            return reward, game_over, self.score
+
         if self.is_collision() or self.frame_iteration > 100*len(self.snake):
             game_over = True
             reward = -10
             return reward, game_over, self.score
 
-        # 4. place new food or just move
         if self.head == self.food:
             self.score += 1
             reward = 10
+            if self.special_food:
+                self.level += 1
+                reward += 5
+                self._generate_obstacles()  # Generate new obstacles when level increases
             self._place_food()
         else:
             self.snake.pop()
 
-        # 5. update ui and clock
         self._update_ui()
         self.clock.tick(SPEED)
 
-        # 6. return game over and score
         return reward, game_over, self.score
 
     def is_collision(self, pt=None):
         if pt is None:
             pt = self.head
-        # hits boundary
         if pt.x > self.w - BLOCK_SIZE or pt.x < 0 or pt.y > self.h - BLOCK_SIZE or pt.y < 0:
             return True
-        # hits itself
-        if pt in self.snake[1:]:
+        if pt in self.snake[1:] or pt in self.obstacles:
             return True
         return False
 
     def _update_ui(self):
         self.display.fill(BLACK)
 
+        # Draw snake
         for pt in self.snake:
             pygame.draw.rect(self.display, BLUE1, pygame.Rect(pt.x, pt.y, BLOCK_SIZE, BLOCK_SIZE))
             pygame.draw.rect(self.display, BLUE2, pygame.Rect(pt.x+4, pt.y+4, 12, 12))
 
-        pygame.draw.rect(self.display, RED, pygame.Rect(self.food.x, self.food.y, BLOCK_SIZE, BLOCK_SIZE))
+        # Draw obstacles
+        for obstacle in self.obstacles:
+            pygame.draw.rect(self.display, (128, 128, 128), pygame.Rect(obstacle.x, obstacle.y, BLOCK_SIZE, BLOCK_SIZE))
 
-        text = font.render("Score: " + str(self.score), True, WHITE)
+        # Draw food (special food is golden)
+        food_color = (255, 215, 0) if hasattr(self, 'special_food') and self.special_food else RED
+        pygame.draw.rect(self.display, food_color, pygame.Rect(self.food.x, self.food.y, BLOCK_SIZE, BLOCK_SIZE))
+
+        # Draw score and level
+        text = font.render(f"Score: {self.score} Level: {self.level}", True, WHITE)
         self.display.blit(text, [0, 0])
         pygame.display.flip()
 
