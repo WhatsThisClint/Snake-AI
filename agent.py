@@ -4,6 +4,7 @@ import numpy as np
 from collections import deque
 from game import SnakeGameAI, Direction, Point
 from model import Linear_QNet, QTrainer
+import os
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
@@ -17,6 +18,8 @@ class Agent:
         self.memory = deque(maxlen=MAX_MEMORY)
         self.model = Linear_QNet(11, 256, 3)
         self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
+        # Try to load existing training state
+        self.load_state()
 
     def get_state(self, game):
         head = game.snake[0]
@@ -93,3 +96,27 @@ class Agent:
             final_move[move] = 1
 
         return final_move
+
+    def save_state(self):
+        state = {
+            'n_games': self.n_games,
+            'epsilon': self.epsilon,
+            'model_state': self.model.state_dict()
+        }
+        model_folder_path = './model'
+        if not os.path.exists(model_folder_path):
+            os.makedirs(model_folder_path)
+        torch.save(state, os.path.join(model_folder_path, 'training_state.pth'))
+        print(f'Game {self.n_games}: Model saved! Current epsilon: {self.epsilon}')
+
+    def load_state(self):
+        try:
+            state = torch.load('./model/training_state.pth')
+            self.n_games = state['n_games']
+            self.epsilon = state['epsilon']
+            self.model.load_state_dict(state['model_state'])
+            print(f'Loaded existing model! Games played: {self.n_games}, Epsilon: {self.epsilon}')
+            return True
+        except:
+            print('No existing model found, starting fresh!')
+            return False

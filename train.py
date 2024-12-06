@@ -45,14 +45,14 @@ def train():
         agent.remember(state_old, final_move, reward, state_new, done)
 
         if done:
-            # train long memory (replay memory), plot result
+            # train long memory, plot result
             game.reset()
             agent.n_games += 1
             agent.train_long_memory()
 
             if score > record:
                 record = score
-                agent.model.save()
+                agent.save_state()  # Save whenever we hit a new record
 
             print('Game', agent.n_games, 'Score', score, 'Record:', record)
 
@@ -61,6 +61,10 @@ def train():
             mean_score = total_score / agent.n_games
             plot_mean_scores.append(mean_score)
             plot(plot_scores, plot_mean_scores)
+
+            # Save every 50 games regardless of score
+            if agent.n_games % 50 == 0:
+                agent.save_state()
 
 if __name__ == '__main__':
     plt.ion()
