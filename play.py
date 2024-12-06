@@ -11,11 +11,11 @@ def play_game():
     
     # Load the trained model if it exists
     model_folder_path = './model'
-    model_path = os.path.join(model_folder_path, 'model.pth')
+    training_state_path = os.path.join(model_folder_path, 'training_state.pth')
     
-    if os.path.exists(model_path):
-        model_state = torch.load(model_path)
-        agent.model.load_state_dict(model_state)
+    if os.path.exists(training_state_path):
+        state = torch.load(training_state_path)
+        agent.model.load_state_dict(state['model_state'])
         print("Loaded trained model!")
     else:
         print("No trained model found. Please train the model first.")
